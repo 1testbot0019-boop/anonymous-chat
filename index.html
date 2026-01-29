@@ -29,10 +29,16 @@
   <div id="messages"></div>
   <input id="messageInput" placeholder="Type message..." />
   <button onclick="sendMessage()">Send</button>
+  <button onclick="startCall()">📞 Start Call</button>
+<button onclick="endCall()">❌ End Call</button>
+<audio id="remoteAudio" autoplay></audio>
+
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
 
 <script>
   const firebaseConfig = {
@@ -50,6 +56,68 @@
 
   let room = "";
   const user = "User" + Math.floor(Math.random() * 10000);
+  // 🔗 Render signaling server
+const SIGNALING_URL = "https://anonymous-chat1-qjem.onrender.com";
+const socket = io(SIGNALING_URL);
+
+let pc;
+let localStream;
+
+const iceConfig = {
+  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+};
+
+function startCall() {
+  if (!room) return alert("Join room first");
+  socket.emit("join", room);
+  initCall(true);
+}
+
+async function initCall(isCaller) {
+  localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+  pc = new RTCPeerConnection(iceConfig);
+
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+  pc.ontrack = e => {
+    document.getElementById("remoteAudio").srcObject = e.streams[0];
+  };
+
+  pc.onicecandidate = e => {
+    if (e.candidate) {
+      socket.emit("ice", { room, candidate: e.candidate });
+    }
+  };
+
+  if (isCaller) {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit("offer", { room, offer });
+  }
+}
+
+socket.on("offer", async data => {
+  socket.emit("join", room);
+  await initCall(false);
+  await pc.setRemoteDescription(data.offer);
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  socket.emit("answer", { room, answer });
+});
+
+socket.on("answer", data => {
+  pc.setRemoteDescription(data.answer);
+});
+
+socket.on("ice", data => {
+  pc.addIceCandidate(data.candidate);
+});
+
+function endCall() {
+  pc?.close();
+}
+
 
   function joinRoom() {
     room = document.getElementById('roomCode').value.trim();
@@ -79,3 +147,4 @@
 
 </body>
 </html>
+
