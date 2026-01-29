@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Private Chat Room</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body { font-family: Arial, sans-serif; background:#0f172a; color:#e5e7eb; margin:0; }
+    .container { max-width:400px; margin:60px auto; background:#020617; padding:20px; border-radius:10px; }
+    h2 { text-align:center; }
+    input, button { width:100%; padding:12px; margin-top:10px; border:none; border-radius:6px; }
+    button { background:#38bdf8; font-weight:bold; cursor:pointer; }
+    #chat { display:none; }
+    #messages { height:350px; overflow-y:auto; border:1px solid #1e293b; padding:10px; border-radius:5px; }
+    .msg { margin-bottom:8px; }
+    .user { color:#38bdf8; font-weight:bold; }
+  </style>
+</head>
+<body>
+
+<div class="container" id="login">
+  <h2>Join Chat Room</h2>
+  <input id="roomCode" placeholder="Enter Room Code" />
+  <button onclick="joinRoom()">Join</button>
+</div>
+
+<div class="container" id="chat">
+  <h2 id="roomTitle"></h2>
+  <div id="messages"></div>
+  <input id="messageInput" placeholder="Type message..." />
+  <button onclick="sendMessage()">Send</button>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyDhcvCrgzvm2G2jia_-JfUX0k_7KSdbMvU",
+    authDomain: "anonymous-chat-eb680.firebaseapp.com",
+    databaseURL: "https://anonymous-chat-eb680-default-rtdb.firebaseio.com",
+    projectId: "anonymous-chat-eb680",
+    storageBucket: "anonymous-chat-eb680.appspot.com",
+    messagingSenderId: "747757674736",
+    appId: "1:747757674736:web:f5392922560b317ccce235"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  let room = "";
+  const user = "User" + Math.floor(Math.random() * 10000);
+
+  function joinRoom() {
+    room = document.getElementById('roomCode').value.trim();
+    if (!room) return alert('Enter a room code');
+
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('chat').style.display = 'block';
+    document.getElementById('roomTitle').innerText = 'Room: ' + room;
+
+    const ref = db.ref('rooms/' + room);
+    ref.limitToLast(100).on('child_added', snap => {
+      const m = snap.val();
+      const div = document.createElement('div');
+      div.className = 'msg';
+      div.innerHTML = `<span class="user">${m.user}:</span> ${m.text}`;
+      document.getElementById('messages').appendChild(div);
+    });
+  }
+
+  function sendMessage() {
+    const text = document.getElementById('messageInput').value;
+    if (!text) return;
+    db.ref('rooms/' + room).push({ user, text, time: Date.now() });
+    document.getElementById('messageInput').value = '';
+  }
+</script>
+
+</body>
+</html>
