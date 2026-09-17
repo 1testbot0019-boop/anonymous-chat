@@ -1,150 +1,266 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Private Chat Room</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Anonymous private room chat with optional peer-to-peer voice calling.">
+  <title>Anonymous Chat</title>
   <style>
-    body { font-family: Arial, sans-serif; background:#0f172a; color:#e5e7eb; margin:0; }
-    .container { max-width:400px; margin:60px auto; background:#020617; padding:20px; border-radius:10px; }
-    h2 { text-align:center; }
-    input, button { width:100%; padding:12px; margin-top:10px; border:none; border-radius:6px; }
-    button { background:#38bdf8; font-weight:bold; cursor:pointer; }
-    #chat { display:none; }
-    #messages { height:350px; overflow-y:auto; border:1px solid #1e293b; padding:10px; border-radius:5px; }
-    .msg { margin-bottom:8px; }
-    .user { color:#38bdf8; font-weight:bold; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; font-family: Arial, sans-serif; background: #0f172a; color: #e5e7eb; }
+    .container { width: 100%; max-width: 520px; background: #020617; padding: 22px; border: 1px solid #1e293b; border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+    h2 { margin: 0 0 14px; text-align: center; }
+    .sub { text-align: center; color: #94a3b8; font-size: 14px; margin-bottom: 18px; }
+    input, button { width: 100%; padding: 12px; margin-top: 10px; border: 0; border-radius: 8px; font-size: 15px; }
+    input { background: #111827; color: #fff; outline: 1px solid #334155; }
+    button { background: #38bdf8; color: #082f49; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #1e293b; color: #e5e7eb; }
+    button.danger { background: #7f1d1d; color: #fff; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    #chat { display: none; }
+    #messages { height: 350px; overflow-y: auto; border: 1px solid #1e293b; padding: 12px; border-radius: 8px; background: #0b1220; }
+    .msg { margin-bottom: 9px; word-break: break-word; }
+    .user { color: #38bdf8; font-weight: 700; }
+    #status { margin: 10px 0; color: #94a3b8; font-size: 13px; min-height: 18px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .row button { margin-top: 10px; }
   </style>
 </head>
 <body>
+  <div class="container" id="login">
+    <h2>Anonymous Chat</h2>
+    <div class="sub">Enter the same room code on both devices.</div>
+    <input id="roomCode" autocomplete="off" maxlength="80" placeholder="Enter Room Code">
+    <button id="joinButton">Join Room</button>
+    <div id="loginStatus"></div>
+  </div>
 
-<div class="container" id="login">
-  <h2>Join Chat Room</h2>
-  <input id="roomCode" placeholder="Enter Room Code" />
-  <button onclick="joinRoom()">Join</button>
-</div>
+  <div class="container" id="chat">
+    <h2 id="roomTitle"></h2>
+    <div id="status">Connected</div>
+    <div id="messages"></div>
+    <input id="messageInput" autocomplete="off" maxlength="2000" placeholder="Type message...">
+    <button id="sendButton">Send Message</button>
+    <div class="row">
+      <button id="callButton" class="secondary">Start Voice Call</button>
+      <button id="endButton" class="danger" disabled>End Call</button>
+    </div>
+    <audio id="remoteAudio" autoplay playsinline></audio>
+  </div>
 
-<div class="container" id="chat">
-  <h2 id="roomTitle"></h2>
-  <div id="messages"></div>
-  <input id="messageInput" placeholder="Type message..." />
-  <button onclick="sendMessage()">Send</button>
-  <button onclick="startCall()">📞 Start Call</button>
-<button onclick="endCall()">❌ End Call</button>
-<audio id="remoteAudio" autoplay></audio>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
-</div>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDhcvCrgzvm2G2jia_-JfUX0k_7KSdbMvU",
+      authDomain: "anonymous-chat-eb680.firebaseapp.com",
+      databaseURL: "https://anonymous-chat-eb680-default-rtdb.firebaseio.com",
+      projectId: "anonymous-chat-eb680",
+      storageBucket: "anonymous-chat-eb680.appspot.com",
+      messagingSenderId: "747757674736",
+      appId: "1:747757674736:web:f5392922560b317ccce235"
+    };
 
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
+    const SIGNALING_URL = "https://anonymous-chat1-qjem.onrender.com";
+    const socket = io(SIGNALING_URL, { transports: ["websocket", "polling"] });
 
-<script>
-  const firebaseConfig = {
-    apiKey: "AIzaSyDhcvCrgzvm2G2jia_-JfUX0k_7KSdbMvU",
-    authDomain: "anonymous-chat-eb680.firebaseapp.com",
-    databaseURL: "https://anonymous-chat-eb680-default-rtdb.firebaseio.com",
-    projectId: "anonymous-chat-eb680",
-    storageBucket: "anonymous-chat-eb680.appspot.com",
-    messagingSenderId: "747757674736",
-    appId: "1:747757674736:web:f5392922560b317ccce235"
-  };
+    let room = "";
+    let pc = null;
+    let localStream = null;
+    let pendingIce = [];
+    let callStarted = false;
+    const user = "User" + Math.floor(1000 + Math.random() * 9000);
 
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
+    const $ = id => document.getElementById(id);
 
-  let room = "";
-  const user = "User" + Math.floor(Math.random() * 10000);
-  // 🔗 Render signaling server
-const SIGNALING_URL = "https://anonymous-chat1-qjem.onrender.com";
-const socket = io(SIGNALING_URL);
+    function setStatus(text) { $("status").textContent = text; }
 
-let pc;
-let localStream;
-
-const iceConfig = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-};
-
-function startCall() {
-  if (!room) return alert("Join room first");
-  socket.emit("join", room);
-  initCall(true);
-}
-
-async function initCall(isCaller) {
-  localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-  pc = new RTCPeerConnection(iceConfig);
-
-  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-
-  pc.ontrack = e => {
-    document.getElementById("remoteAudio").srcObject = e.streams[0];
-  };
-
-  pc.onicecandidate = e => {
-    if (e.candidate) {
-      socket.emit("ice", { room, candidate: e.candidate });
+    function addMessage(message) {
+      const div = document.createElement("div");
+      div.className = "msg";
+      const userSpan = document.createElement("span");
+      userSpan.className = "user";
+      userSpan.textContent = message.user + ": ";
+      div.appendChild(userSpan);
+      div.appendChild(document.createTextNode(message.text || ""));
+      $("messages").appendChild(div);
+      $("messages").scrollTop = $("messages").scrollHeight;
     }
-  };
 
-  if (isCaller) {
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socket.emit("offer", { room, offer });
-  }
-}
+    function joinRoom() {
+      const value = $("roomCode").value.trim();
+      if (!value) {
+        $("loginStatus").textContent = "Enter a room code.";
+        return;
+      }
 
-socket.on("offer", async data => {
-  socket.emit("join", room);
-  await initCall(false);
-  await pc.setRemoteDescription(data.offer);
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  socket.emit("answer", { room, answer });
-});
+      room = value.replace(/[.#$\[\]/]/g, "_");
+      $("login").style.display = "none";
+      $("chat").style.display = "block";
+      $("roomTitle").textContent = "Room: " + room;
 
-socket.on("answer", data => {
-  pc.setRemoteDescription(data.answer);
-});
+      const ref = db.ref("rooms/" + room);
+      ref.limitToLast(100).on("child_added", snap => {
+        const m = snap.val();
+        if (m && m.text) addMessage(m);
+      }, error => setStatus("Chat database error: " + error.message));
 
-socket.on("ice", data => {
-  pc.addIceCandidate(data.candidate);
-});
+      socket.emit("join", room);
+      setStatus("Joined room. Ready to chat.");
+    }
 
-function endCall() {
-  pc?.close();
-}
+    function sendMessage() {
+      const text = $("messageInput").value.trim();
+      if (!room || !text) return;
+      db.ref("rooms/" + room).push({ user, text, time: Date.now() })
+        .then(() => { $("messageInput").value = ""; })
+        .catch(err => setStatus("Message failed: " + err.message));
+    }
 
+    async function createPeerConnection() {
+      if (pc) return pc;
+      pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" }
+        ]
+      });
 
-  function joinRoom() {
-    room = document.getElementById('roomCode').value.trim();
-    if (!room) return alert('Enter a room code');
+      pc.ontrack = event => {
+        if (event.streams[0]) $("remoteAudio").srcObject = event.streams[0];
+      };
 
-    document.getElementById('login').style.display = 'none';
-    document.getElementById('chat').style.display = 'block';
-    document.getElementById('roomTitle').innerText = 'Room: ' + room;
+      pc.onicecandidate = event => {
+        if (event.candidate && room) socket.emit("ice", { room, candidate: event.candidate });
+      };
 
-    const ref = db.ref('rooms/' + room);
-    ref.limitToLast(100).on('child_added', snap => {
-      const m = snap.val();
-      const div = document.createElement('div');
-      div.className = 'msg';
-      div.innerHTML = `<span class="user">${m.user}:</span> ${m.text}`;
-      document.getElementById('messages').appendChild(div);
+      pc.onconnectionstatechange = () => {
+        setStatus("Call: " + pc.connectionState);
+        if (["failed", "closed", "disconnected"].includes(pc.connectionState)) {
+          $("endButton").disabled = false;
+        }
+      };
+
+      return pc;
+    }
+
+    async function startCall() {
+      if (!room) return;
+      if (!navigator.mediaDevices?.getUserMedia) {
+        alert("Microphone access requires HTTPS or localhost.");
+        return;
+      }
+
+      try {
+        callStarted = true;
+        $("callButton").disabled = true;
+        $("endButton").disabled = false;
+        setStatus("Requesting microphone access...");
+
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        await createPeerConnection();
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit("offer", { room, offer: pc.localDescription });
+        setStatus("Calling... waiting for the other person.");
+      } catch (err) {
+        console.error(err);
+        setStatus("Call failed: " + err.message);
+        stopCall();
+      }
+    }
+
+    async function handleOffer(data) {
+      if (!room || data.room !== room) return;
+      try {
+        if (!localStream) {
+          localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        }
+        await createPeerConnection();
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+
+        for (const candidate of pendingIce.splice(0)) {
+          await pc.addIceCandidate(candidate).catch(console.warn);
+        }
+
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit("answer", { room, answer: pc.localDescription });
+        callStarted = true;
+        $("callButton").disabled = true;
+        $("endButton").disabled = false;
+        setStatus("Voice call connected.");
+      } catch (err) {
+        console.error(err);
+        setStatus("Incoming call failed: " + err.message);
+      }
+    }
+
+    socket.on("connect", () => {
+      if (room) socket.emit("join", room);
     });
-  }
 
-  function sendMessage() {
-    const text = document.getElementById('messageInput').value;
-    if (!text) return;
-    db.ref('rooms/' + room).push({ user, text, time: Date.now() });
-    document.getElementById('messageInput').value = '';
-  }
-</script>
+    socket.on("connect_error", err => {
+      setStatus("Signaling server unavailable. Chat may still work.");
+      console.error("Socket error", err.message);
+    });
 
+    socket.on("offer", handleOffer);
+
+    socket.on("answer", async data => {
+      if (!pc || data.room !== room) return;
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+        for (const candidate of pendingIce.splice(0)) {
+          await pc.addIceCandidate(candidate).catch(console.warn);
+        }
+        setStatus("Voice call connected.");
+      } catch (err) {
+        setStatus("Could not connect call: " + err.message);
+      }
+    });
+
+    socket.on("ice", async data => {
+      if (!data?.candidate || data.room !== room) return;
+      const candidate = new RTCIceCandidate(data.candidate);
+      if (pc?.remoteDescription) {
+        await pc.addIceCandidate(candidate).catch(console.warn);
+      } else {
+        pendingIce.push(candidate);
+      }
+    });
+
+    function stopCall() {
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      if (pc) {
+        pc.close();
+        pc = null;
+      }
+      $("remoteAudio").srcObject = null;
+      callStarted = false;
+      pendingIce = [];
+      $("callButton").disabled = false;
+      $("endButton").disabled = true;
+      setStatus("Call ended.");
+    }
+
+    $("joinButton").addEventListener("click", joinRoom);
+    $("sendButton").addEventListener("click", sendMessage);
+    $("callButton").addEventListener("click", startCall);
+    $("endButton").addEventListener("click", stopCall);
+    $("roomCode").addEventListener("keydown", e => { if (e.key === "Enter") joinRoom(); });
+    $("messageInput").addEventListener("keydown", e => { if (e.key === "Enter") sendMessage(); });
+  </script>
 </body>
 </html>
-
