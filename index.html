@@ -30,7 +30,7 @@
 </div>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script>
-const SIGNALING_URL="https://anonymous-chat1-qjem.onrender.com";
+const SIGNALING_URL="https://anonymous-chat-42im.onrender.com";
 const socket=io(SIGNALING_URL,{transports:["websocket","polling"],reconnection:true,reconnectionAttempts:8,timeout:10000});
 let room="",displayName="",pc=null,localStream=null,pendingIce=[],joined=false;
 const $=id=>document.getElementById(id);
