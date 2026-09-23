@@ -16,19 +16,24 @@
 <h2>Join a Room</h2>
 <label for="roomCode">Room code</label><input id="roomCode" maxlength="80" autocomplete="off" placeholder="Enter room code" autofocus>
 <label for="displayName">Your name <span class="hint">(optional)</span></label><input id="displayName" maxlength="30" autocomplete="off" placeholder="Leave blank to use Bot1, Bot2, Bot3...">
-<button id="joinButton">Join Chat</button>
+<button id="joinButton" type="button">Join Chat</button>
 <div id="joinStatus" class="notice">Name is optional. Blank names automatically receive Bot1, Bot2, Bot3 and so on.</div>
 </section>
 <section id="chatPanel" class="panel hidden">
 <div class="topbar"><div><h2>Chat Room</h2><div class="room" id="roomTitle"></div></div><div id="identity" class="room"></div></div>
 <div id="status" class="status">Connecting...</div>
 <div id="messages" class="messages"></div>
-<div class="composer"><input id="messageInput" maxlength="2000" autocomplete="off" placeholder="Type a message..."><button id="sendButton">Send</button></div>
-<div class="actions"><button id="callButton" class="secondary">Start Voice Call</button><button id="endButton" class="danger" disabled>End Call</button></div>
+<div class="composer"><input id="messageInput" maxlength="2000" autocomplete="off" placeholder="Type a message..."><button id="sendButton" type="button">Send</button></div>
+<div class="actions"><button id="callButton" type="button" class="secondary">Start Voice Call</button><button id="endButton" type="button" class="danger" disabled>End Call</button></div>
 <audio id="remoteAudio" autoplay playsinline></audio>
 </section>
 </div>
 <script>
+if(typeof io!=="function"){
+  document.getElementById("joinButton").disabled=true;
+  document.getElementById("joinStatus").textContent="Chat client could not load. Please refresh the page.";
+  throw new Error("Socket.IO client failed to load");
+}
 const SIGNALING_URL="https://anonymous-chat-42im.onrender.com";
 const socket=io(SIGNALING_URL,{autoConnect:false,transports:["websocket","polling"],reconnection:true,reconnectionAttempts:20,reconnectionDelay:1000,reconnectionDelayMax:5000,timeout:10000});
 
