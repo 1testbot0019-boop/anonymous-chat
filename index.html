@@ -28,27 +28,288 @@
 <audio id="remoteAudio" autoplay playsinline></audio>
 </section>
 </div>
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script>
 const SIGNALING_URL="https://anonymous-chat-42im.onrender.com";
-const socket=io(SIGNALING_URL,{autoConnect:false,transports:["websocket","polling"],reconnection:true,reconnectionAttempts:10,reconnectionDelay:1000,reconnectionDelayMax:5000,timeout:10000});
+const socket=io(SIGNALING_URL,{autoConnect:false,transports:["websocket","polling"],reconnection:true,reconnectionAttempts:20,reconnectionDelay:1000,reconnectionDelayMax:5000,timeout:10000});
+
 let room="",displayName="",pc=null,localStream=null,pendingIce=[],joined=false,joinInProgress=false,joinTimer=null;
+
 const $=id=>document.getElementById(id);
+
 function setStatus(t){$("status").textContent=t}
-function cleanRoom(v){return v.trim().replace(/[.#$\\[\\]/]/g,"_").slice(0,80)}
-function cleanName(v){return v.replace(/[<>]/g,"").trim().slice(0,30)}
-function addMessage(m){const d=document.createElement("div");d.className="msg";const n=document.createElement("span");n.className="name";n.textContent=(m.user||"Bot")+": ";d.appendChild(n);d.appendChild(document.createTextNode(m.text||""));const tm=document.createElement("span");tm.className="time";if(m.time)tm.textContent=new Date(m.time).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});d.appendChild(tm);$("messages").appendChild(d);$("messages").scrollTop=$("messages").scrollHeight}
-function addSystem(text){const d=document.createElement("div");d.className="system";d.textContent=text;$("messages").appendChild(d);$("messages").scrollTop=$("messages").scrollHeight}
-function joinRoom(){
- if(joined||joinInProgress)return;
- const raw=$("roomCode").value;
- if(!raw.trim()){$("joinStatus").textContent="Please enter a room code.";return}
- room=cleanRoom(raw);displayName=cleanName($("displayName").value);
- if(!room){$("joinStatus").textContent="Please enter a valid room code.";return}
- joinInProgress=true;
- const button=$("joinButton");button.disabled=true;$("joinStatus").textContent="Connecting to chat server...";
- if(socket.connected){socket.emit("join",{room,name:displayName});}
- else{socket.connect();}
- clearTimeout(joinTimer);
- joinTimer=setTimeout(()=>{if(!joined){joinInProgress=false;button.disabled=false;$("joinStatus").textContent="Could not connect to the chat server. Please try again."}},12000);
+
+function cleanRoom(v){
+  return v.trim().replace(/[.#$\[\]/]/g,"_").slice(0,80);
 }
+
+function cleanName(v){
+  return v.replace(/[<>]/g,"").trim().slice(0,30);
+}
+
+function addMessage(m){
+  const d=document.createElement("div");
+  d.className="msg";
+  const n=document.createElement("span");
+  n.className="name";
+  n.textContent=(m.user||"Bot")+": ";
+  d.appendChild(n);
+  d.appendChild(document.createTextNode(m.text||""));
+  const tm=document.createElement("span");
+  tm.className="time";
+  if(m.time)tm.textContent=new Date(m.time).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+  d.appendChild(tm);
+  $("messages").appendChild(d);
+  $("messages").scrollTop=$("messages").scrollHeight;
+}
+
+function addSystem(text){
+  const d=document.createElement("div");
+  d.className="system";
+  d.textContent=text;
+  $("messages").appendChild(d);
+  $("messages").scrollTop=$("messages").scrollHeight;
+}
+
+function joinRoom(){
+  if(joined||joinInProgress)return;
+  const raw=$("roomCode").value;
+  if(!raw.trim()){
+    $("joinStatus").textContent="Please enter a room code.";
+    return;
+  }
+  room=cleanRoom(raw);
+  displayName=cleanName($("displayName").value);
+  if(!room){
+    $("joinStatus").textContent="Please enter a valid room code.";
+    return;
+  }
+  joinInProgress=true;
+  $("joinButton").disabled=true;
+  $("joinStatus").textContent="Connecting to chat server...";
+  if(socket.connected) socket.emit("join",{room,name:displayName});
+  else socket.connect();
+
+  clearTimeout(joinTimer);
+  joinTimer=setTimeout(()=>{
+    if(!joined){
+      joinInProgress=false;
+      $("joinButton").disabled=false;
+      $("joinStatus").textContent="Could not connect to the chat server. Please try again.";
+    }
+  },12000);
+}
+
+socket.on("connect",()=>{
+  if(room&&!joined&&joinInProgress){
+    $("joinStatus").textContent="Connected. Joining room...";
+    socket.emit("join",{room,name:displayName});
+  }
+});
+
+socket.on("connect_error",()=>{
+  if(!joined){
+    joinInProgress=false;
+    clearTimeout(joinTimer);
+    $("joinButton").disabled=false;
+    $("joinStatus").textContent="Chat server connection failed. Please try again.";
+  }else{
+    setStatus("Connection interrupted. Reconnecting...");
+  }
+});
+
+socket.on("disconnect",()=>{
+  if(joined)setStatus("Connection interrupted. Reconnecting...");
+});
+
+socket.on("joined",data=>{
+  if(!data||data.room!==room)return;
+  clearTimeout(joinTimer);
+  joinInProgress=false;
+  displayName=data.name||"Bot";
+  joined=true;
+
+  $("joinPanel").classList.add("hidden");
+  $("chatPanel").classList.remove("hidden");
+  $("roomTitle").textContent="Room: "+room;
+  $("identity").textContent=displayName;
+  setStatus(socket.connected?"Connected":"Reconnecting...");
+
+  $("messages").innerHTML="";
+  addSystem("You joined the room as "+displayName+".");
+  if(Array.isArray(data.members)&&data.members.length>1){
+    addSystem(data.members.length+" people are currently in this room.");
+  }
+});
+
+socket.on("join_error",msg=>{
+  clearTimeout(joinTimer);
+  joinInProgress=false;
+  $("joinButton").disabled=false;
+  $("joinStatus").textContent=msg||"Could not join room.";
+});
+
+socket.on("system",msg=>{if(joined)addSystem(msg)});
+
+socket.on("chat",msg=>{if(joined)addMessage(msg)});
+
+function sendMessage(){
+  const text=$("messageInput").value.trim();
+  if(!joined||!socket.connected||!text)return;
+  socket.emit("chat",text.slice(0,2000));
+  $("messageInput").value="";
+  $("messageInput").focus();
+}
+
+function closePeer(){
+  if(pc){
+    pc.onicecandidate=null;
+    pc.ontrack=null;
+    pc.onconnectionstatechange=null;
+    pc.close();
+    pc=null;
+  }
+  pendingIce=[];
+  $("endButton").disabled=true;
+  $("callButton").disabled=false;
+}
+
+async function createPeer(){
+  if(pc)return pc;
+  pc=new RTCPeerConnection({
+    iceServers:[
+      {urls:"stun:stun.l.google.com:19302"},
+      {urls:"stun:stun1.l.google.com:19302"}
+    ]
+  });
+
+  pc.onicecandidate=e=>{
+    if(e.candidate&&room)socket.emit("ice",{room,candidate:e.candidate});
+  };
+
+  pc.ontrack=e=>{
+    $("remoteAudio").srcObject=e.streams[0];
+    $("remoteAudio").play().catch(()=>{});
+  };
+
+  pc.onconnectionstatechange=()=>{
+    const state=pc?.connectionState;
+    if(state==="connected"){
+      setStatus("Voice call connected");
+      $("endButton").disabled=false;
+    }else if(state==="failed"){
+      setStatus("Voice connection failed. Try Start Voice Call again.");
+    }else if(state==="disconnected"){
+      setStatus("Voice call disconnected.");
+    }
+  };
+
+  if(localStream){
+    localStream.getTracks().forEach(track=>pc.addTrack(track,localStream));
+  }
+  return pc;
+}
+
+async function startCall(){
+  if(!joined||!socket.connected)return;
+  try{
+    $("callButton").disabled=true;
+    setStatus("Requesting microphone...");
+    localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    await createPeer();
+    const offer=await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit("offer",{room,offer:pc.localDescription});
+    $("endButton").disabled=false;
+    setStatus("Calling people in this room...");
+  }catch(err){
+    console.error(err);
+    $("callButton").disabled=false;
+    $("endButton").disabled=true;
+    setStatus("Microphone permission is required for voice calling.");
+    if(localStream){
+      localStream.getTracks().forEach(t=>t.stop());
+      localStream=null;
+    }
+  }
+}
+
+async function endCall(){
+  if(localStream){
+    localStream.getTracks().forEach(t=>t.stop());
+    localStream=null;
+  }
+  closePeer();
+  $("remoteAudio").srcObject=null;
+  if(joined)setStatus("Connected");
+}
+
+socket.on("offer",async data=>{
+  if(!joined||!data?.offer)return;
+  try{
+    localStream=localStream||await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    await createPeer();
+    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+
+    for(const candidate of pendingIce){
+      try{await pc.addIceCandidate(candidate)}catch(e){}
+    }
+    pendingIce=[];
+
+    const answer=await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit("answer",{room,answer:pc.localDescription});
+    $("endButton").disabled=false;
+    setStatus("Voice call connected");
+  }catch(err){
+    console.error(err);
+    setStatus("Could not accept the voice call.");
+  }
+});
+
+socket.on("answer",async data=>{
+  if(!pc||!data?.answer)return;
+  try{
+    await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+    for(const candidate of pendingIce){
+      try{await pc.addIceCandidate(candidate)}catch(e){}
+    }
+    pendingIce=[];
+    setStatus("Voice call connected");
+  }catch(err){
+    console.error(err);
+  }
+});
+
+socket.on("ice",async data=>{
+  if(!data?.candidate)return;
+  try{
+    const candidate=new RTCIceCandidate(data.candidate);
+    if(pc?.remoteDescription?.type) await pc.addIceCandidate(candidate);
+    else pendingIce.push(candidate);
+  }catch(err){
+    console.error(err);
+  }
+});
+
+$("joinButton").onclick=joinRoom;
+$("sendButton").onclick=sendMessage;
+$("callButton").onclick=startCall;
+$("endButton").onclick=endCall;
+
+$("messageInput").addEventListener("keydown",e=>{
+  if(e.key==="Enter"&&!e.shiftKey){
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+$("roomCode").addEventListener("keydown",e=>{
+  if(e.key==="Enter")joinRoom();
+});
+
+$("displayName").addEventListener("keydown",e=>{
+  if(e.key==="Enter")joinRoom();
+});
+</script>
+</body>
+</html>
