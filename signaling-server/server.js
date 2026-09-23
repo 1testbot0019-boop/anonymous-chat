@@ -8,7 +8,7 @@ const rooms = new Map();
 
 const allowedOrigin = process.env.CLIENT_ORIGIN || true;
 const io = new Server(server, {
-  cors: { origin: allowedOrigin, methods: ["GET", "POST"] },
+  cors: { origin: allowedOrigin, methods: ["GET", "POST"], credentials: false },
   transports: ["websocket", "polling"]
 });
 
