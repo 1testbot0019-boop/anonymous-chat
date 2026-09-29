@@ -35,8 +35,8 @@ if(typeof io!=="function"){
   document.getElementById("joinStatus").textContent="Chat client could not load. Please refresh the page.";
   throw new Error("Socket.IO client failed to load");
 }
-const SIGNALING_URL="https://anonymous-chat-42im.onrender.com";
-const socket=io(SIGNALING_URL,{autoConnect:false,transports:["websocket","polling"],reconnection:true,reconnectionAttempts:20,reconnectionDelay:1000,reconnectionDelayMax:5000,timeout:10000});
+const SIGNALING_URL=(window.ANONYMOUS_CHAT_SIGNALING_URL||"https://anonymous-chat-42im.onrender.com").replace(/\/$/,"");
+const socket=io(SIGNALING_URL,{autoConnect:false,transports:["polling","websocket"],reconnection:true,reconnectionAttempts:Infinity,reconnectionDelay:1000,reconnectionDelayMax:5000,timeout:15000,forceNew:true});
 
 let room="",displayName="",pc=null,localStream=null,pendingIce=[],joined=false,joinInProgress=false,joinTimer=null;
 
@@ -112,12 +112,12 @@ socket.on("connect",()=>{
   }
 });
 
-socket.on("connect_error",()=>{
+socket.on("connect_error",err=>{
   if(!joined){
     joinInProgress=false;
     clearTimeout(joinTimer);
     $("joinButton").disabled=false;
-    $("joinStatus").textContent="Chat server connection failed. Please try again.";
+    $("joinStatus").textContent="Chat server connection failed ("+(err?.message||"connection error")+"). Please try again.";
   }else{
     setStatus("Connection interrupted. Reconnecting...");
   }
