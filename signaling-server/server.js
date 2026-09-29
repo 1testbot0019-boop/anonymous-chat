@@ -65,16 +65,16 @@ io.on("connection", socket => {
   });
 
   socket.on("offer", data => {
-    if (!data?.room || !data?.offer) return;
-    socket.to(data.room).emit("offer", data);
+    if (!socket.data.room || !data?.offer) return;
+    socket.to(socket.data.room).emit("offer", { offer: data.offer });
   });
   socket.on("answer", data => {
-    if (!data?.room || !data?.answer) return;
-    socket.to(data.room).emit("answer", data);
+    if (!socket.data.room || !data?.answer) return;
+    socket.to(socket.data.room).emit("answer", { answer: data.answer });
   });
   socket.on("ice", data => {
-    if (!data?.room || !data?.candidate) return;
-    socket.to(data.room).emit("ice", data);
+    if (!socket.data.room || !data?.candidate) return;
+    socket.to(socket.data.room).emit("ice", { candidate: data.candidate });
   });
 
   socket.on("disconnect", () => {
