@@ -35,7 +35,7 @@ if(typeof io!=="function"){
   document.getElementById("joinStatus").textContent="Chat client could not load. Please refresh the page.";
   throw new Error("Socket.IO client failed to load");
 }
-const SIGNALING_URL=(window.ANONYMOUS_CHAT_SIGNALING_URL||"https://anonymous-chat-42im.onrender.com").replace(/\/$/,"");
+const SIGNALING_URL=(window.ANONYMOUS_CHAT_SIGNALING_URL||"https://anonymous-chat1-qjem.onrender.com").replace(/\/$/,"");
 const socket=io(SIGNALING_URL,{autoConnect:false,transports:["polling","websocket"],reconnection:true,reconnectionAttempts:Infinity,reconnectionDelay:1000,reconnectionDelayMax:5000,timeout:15000,forceNew:true});
 
 let room="",displayName="",pc=null,localStream=null,pendingIce=[],joined=false,joinInProgress=false,joinTimer=null;
