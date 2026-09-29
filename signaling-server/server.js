@@ -52,7 +52,7 @@ io.on("connection", socket => {
     socket.data.name = name;
     roomMembers.set(socket.id, { name, joinedAt: Date.now() });
 
-    socket.emit("joined", { room, name, members: [...roomMembers.values()] });
+    socket.emit("joined", { room, name, members: [...roomMembers.values()].map(member => ({ name: member.name })) });
     socket.to(room).emit("system", `${name} joined the room.`);
   });
 
